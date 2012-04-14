@@ -510,8 +510,8 @@ namespace Questor.Modules
                if (Settings.Instance.CharacterMode.ToLower() == "salvage" && (DateTime.Now > _nextPeopleandPlacesrefresh))
                {
                   _nextPeopleandPlacesrefresh = DateTime.Now.AddMinutes(Settings.Instance.RandomNumber5To15());
-                  Logging.Log("Salvage: Refreshing People and Places Window: Next refresh in [ " + Math.Round(DateTime.Now.Subtract(_nextPeopleandPlacesrefresh).TotalMinutes,0) + " min]");
-                  Cache.Instance.DirectEve.RefreshPnPWindow();
+                  Logging.Log("Salvage: Refreshing Bookmarks: Next refresh in [ " + Math.Round(DateTime.Now.Subtract(_nextPeopleandPlacesrefresh).TotalMinutes,0) + " min]");
+                  Cache.Instance.DirectEve.RefreshBookmarks();
                }
                return;
             }
