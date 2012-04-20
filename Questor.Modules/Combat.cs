@@ -284,17 +284,26 @@ namespace Questor.Modules
         /// </summary>
         private void ActivateWeapons(EntityCache target)
         {
+           const bool debugDeActivateWeapons = true;
+           const bool debugActivateWeapons = true;
+
             // When in warp there's nothing we can do, so ignore everything
             if (Cache.Instance.InWarp)
+            {
+               if (debugDeActivateWeapons) Logging.Log("Combat: ActivateWeapons: deactivate: we are in warp! doing nothing");
                 return;
-
+            }
             if (DateTime.Now < Cache.Instance.NextWeaponAction) //if we just did something wait a fraction of a second
+            {
+               if (debugDeActivateWeapons) Logging.Log("Combat: ActivateWeapons: deactivate: waiting on NextWeaponAction");
                 return;
+            }
 
-            if (Settings.Instance.SpeedTank && (Cache.Instance.Approaching == null || Cache.Instance.Approaching.Id != target.Id))
+           if (Settings.Instance.SpeedTank && (!Cache.Instance.IsApproachingOrOrbiting || Cache.Instance.Approaching.Id != target.Id))
             {
                 if (DateTime.Now > Cache.Instance.NextOrbit)
                 {
+                    if (debugDeActivateWeapons) Logging.Log("Combat: ActivateWeapons: deactivate: Currently not approaching or orbiting anything: initiate orbit");
                     target.Orbit(Cache.Instance.OrbitDistance);
                     Logging.Log("Combat.ActivateWeapons: Initiating Orbit [" + target.Name + "][ID: " + target.Id + "]");
                     Cache.Instance.NextOrbit = DateTime.Now.AddSeconds((int)Time.OrbitDelay_seconds);
@@ -305,9 +314,11 @@ namespace Questor.Modules
             // If you are not in a mission by all means let combat actions move you around as needed
             if (!Cache.Instance.InMission)
             {
+               if (debugDeActivateWeapons) Logging.Log("Combat: ActivateWeapons: deactivate: we are NOT in a mission: navigateintorange");
                 MissionController.NavigateIntoRange(target); //eventually this method should be moved to something like navigate.cs or movement.cs
             }
 
+            if (debugDeActivateWeapons) Logging.Log("Combat: ActivateWeapons: deactivate: after navigate into range...");
             // Get the weapons
             IEnumerable<ModuleCache> weapons = Cache.Instance.Weapons;
 
@@ -315,6 +326,7 @@ namespace Questor.Modules
             // Get distance of the target and compare that with the ammo currently loaded
             foreach (ModuleCache weapon in weapons)
             {
+                if (debugDeActivateWeapons) Logging.Log("Combat: ActivateWeapons: deactivate: for each weapon [" + weapon.ItemId + "] in weapons");
                 // don't waste ammo on small target if you use autocannon or siege i hope you use drone
                 if (Settings.Instance.DontShootFrigatesWithSiegeorAutoCannons) //this defaults to false and needs to be changed in your characters settings xml file if you want to enable this option
                 {
@@ -327,38 +339,53 @@ namespace Questor.Modules
                     }
                 }
                 if (!weapon.IsActive)
+                {
+                   if (debugDeActivateWeapons) Logging.Log("Combat: ActivateWeapons: deactivate: weapon [" + weapon.ItemId + "] is not active: no need to do anything");
                     continue;
-
+                }
                 if (weapon.IsReloadingAmmo || weapon.IsDeactivating || weapon.IsChangingAmmo)
+                {
+                   if (debugDeActivateWeapons) Logging.Log("Combat: ActivateWeapons: deactivate: weapon [" + weapon.ItemId + "] is reloading, deactivating or changing ammo: no need to do anything");
                     continue;
+                }
 
                 if (DateTime.Now < Cache.Instance.NextReload) //if we should not yet reload we are likely in the middle of a reload and should wait!
+               {
+                  if (debugDeActivateWeapons) Logging.Log("Combat: ActivateWeapons: deactivate: NextReload is still in the future: wait before doing anything with the weapon");
                     return;
+               }
 
                 // No ammo loaded
                 if (weapon.Charge == null)
+                {
+                   if (debugDeActivateWeapons) Logging.Log("Combat: ActivateWeapons: deactivate: no ammo loaded? [" + weapon.ItemId + "] reload will happen elsewhere");
                     continue;
+                }
 
                 Ammo ammo = Settings.Instance.Ammo.FirstOrDefault(a => a.TypeId == weapon.Charge.TypeId);
 
                 //use mission specific ammo
                 if (Cache.Instance.MissionAmmo.Count() != 0)
                 {
+                   if (debugDeActivateWeapons) Logging.Log("Combat: ActivateWeapons: deactivate: MissionAmmocount is not 0");
                     ammo = Cache.Instance.MissionAmmo.FirstOrDefault(a => a.TypeId == weapon.Charge.TypeId);
                 }
 
                 // How can this happen? Someone manually loaded ammo
                 if (ammo == null)
-                    continue;
-
-                // If we have already activated warp, deactivate the weapons
-                if (!Cache.Instance.DirectEve.ActiveShip.Entity.IsWarping)
                 {
+                   if (debugDeActivateWeapons) Logging.Log("Combat: ActivateWeapons: deactivate: ammo == null [" + weapon.ItemId + "] someone manually loaded ammo?");
+                   continue;
+                }
                     // Target is in range
                     if (target.Distance <= ammo.Range)
+                {
+                   if (debugDeActivateWeapons) Logging.Log("Combat: ActivateWeapons: deactivate: target is in range: do nothing, wait until it is dead");
                         continue;
                 }
+
                 // Target is out of range, stop firing
+                if (debugDeActivateWeapons) Logging.Log("Combat: ActivateWeapons: deactivate: target is out of range, stop firing");
                 weapon.Click();
             }
 
@@ -374,19 +401,27 @@ namespace Questor.Modules
             {
                 // Are we reloading, deactivating or changing ammo?
                 if (weapon.IsReloadingAmmo || weapon.IsDeactivating || weapon.IsChangingAmmo)
+                {
+                   if (debugActivateWeapons) Logging.Log("Combat: ActivateWeapons: Activate: weapon [" + weapon.ItemId + "] is reloading, deactivating or changing ammo");
                     continue;
+                }
+
                 // Are we on the right target?
                 if (weapon.IsActive)
                 {
+                   if (debugActivateWeapons) Logging.Log("Combat: ActivateWeapons: Activate: weapon [" + weapon.ItemId + "] is active already");
                     if (weapon.TargetId != target.Id)
+                    {
+                       if (debugActivateWeapons) Logging.Log("Combat: ActivateWeapons: Activate: weapon [" + weapon.ItemId + "] is shooting at the wrong target: deactivating");
                         weapon.Click();
-
+                    }
                     continue;
                 }
 
                 // No, check ammo type and if that is correct, activate weapon
                 if (ReloadAmmo(weapon, target) && CanActivate(weapon, target, true))
                 {
+                   if (debugActivateWeapons) Logging.Log("Combat: ActivateWeapons: Activate: weapon [" + weapon.ItemId + "] has the correct ammo: activate");
                     Logging.Log("Combat: Activating weapon  [" + weapon.ItemId + "] on [" + target.Name + "][ID: " + target.Id + "][" + Math.Round(target.Distance / 1000, 0) + "k away]");
                     weapon.Activate(target.Id);
                     Cache.Instance.NextWeaponAction = DateTime.Now.AddMilliseconds((int)Time.WeaponDelay_milliseconds);
